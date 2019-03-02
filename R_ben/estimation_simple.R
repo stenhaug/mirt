@@ -7,16 +7,15 @@ estimation_simple <- function(data, model, group, itemtype = NULL, guess = 0, up
                        gpcm_mats=list(), spline_args=list(), monopoly.k=1,
                        control = list(), ...)
 {
-    # get started
+
+    # Beginning stuff ---------------------------------------------------------
     start.time <- proc.time()[3L]
     dots <- list(...)
 
-    # this was that big if
-    opts <- makeopts(GenRandomPars=GenRandomPars,
-                     hasCustomGroup=!is.null(customGroup), ...)
+    opts <- makeopts(GenRandomPars=GenRandomPars, hasCustomGroup=!is.null(customGroup), ...) # this was start of that big if
     opts$times <- list(start.time=start.time)
-    # on exit, reset the seed to override internal
-    if(opts$method == 'MHRM') {on.exit(set.seed((as.numeric(Sys.time()) - floor(as.numeric(Sys.time()))) * 1e8))}
+
+    if(opts$method == 'MHRM') {on.exit(set.seed((as.numeric(Sys.time()) - floor(as.numeric(Sys.time()))) * 1e8))} # on exit, reset the seed to override internal
 
     opts$times$start.time.Data <- proc.time()[3L]
     Data <- list()
@@ -74,7 +73,6 @@ estimation_simple <- function(data, model, group, itemtype = NULL, guess = 0, up
         Data$Freq[[g]] <- large$Freq[[g]]
     }
 
-
     PrepList <- UpdateParameters(PrepList, model, groupNames=Data$groupNames)
 
     RETURNVALUES <- FALSE
@@ -89,74 +87,15 @@ estimation_simple <- function(data, model, group, itemtype = NULL, guess = 0, up
     constrain <- list()
 
 
-
-
-
-    # here
-
-
-
-
-
-
     nspec <- ifelse(!is.null(attr(model, 'nspec')), attr(model, 'nspec'), 1L)
-    #default MG uses configural model (independent groups but each identified)
-    # if('free_means' %in% invariance ){ #Free factor means (means 0 for ref)
-    #     if(opts$dentype == 'bfactor'){
-    #         for(g in 2L:Data$ngroups)
-    #             pars[[g]][[nitems + 1L]]@est[1L:(nfact-nspec)] <- TRUE
-    #     } else {
-    #         for(g in 2L:Data$ngroups)
-    #             pars[[g]][[nitems + 1L]]@est[1L:nfact] <- TRUE
-    #     }
-    # }
+
     dummymat <- matrix(FALSE, pars[[1L]][[nitems + 1L]]@nfact, pars[[1L]][[nitems + 1L]]@nfact)
-    # if(any('free_var' %in% invariance)){ #Free factor vars (vars 1 for ref)
-    #     if(opts$dentype == 'bfactor'){
-    #         tmp <- dummymat[1L:(nfact-nspec),1L:(nfact-nspec), drop=FALSE]
-    #         diag(tmp) <- TRUE
-    #         dummymat[1L:(nfact-nspec),1L:(nfact-nspec)] <- tmp
-    #     } else {
-    #         diag(dummymat) <- TRUE
-    #     }
-    #     tmp <- dummymat[lower.tri(dummymat, TRUE)]
-    #     if(opts$dentype %in% c('Davidian', 'EHW')){
-    #         for(g in 2L:Data$ngroups)
-    #             pars[[g]][[nitems + 1L]]@est[2L] <- TRUE
-    #     } else {
-    #         for(g in 2L:Data$ngroups){
-    #             pars[[g]][[nitems + 1L]]@est <- c(pars[[g]][[nitems + 1L]]@est[1L:pars[[g]][[nitems + 1L]]@nfact], tmp)
-    #             names(pars[[g]][[nitems + 1L]]@est) <- names(pars[[g]][[nitems + 1L]]@par)
-    #             pars[[g]][[nitems + 1L]]@parnames <- names(pars[[g]][[nitems + 1L]]@est)
-    #         }
-    #     }
-    # }
-    # if(opts$dentype == 'mixture'){
-    #     tmp <- length(pars[[1L]][[nitems + 1L]]@par)
-    #     pars[[1L]][[nitems + 1L]]@est[tmp] <- FALSE
-    #     for(g in 1L:Data$ngroups)
-    #         pars[[g]][[nitems + 1L]]@par[tmp] <- g - 1
-    #     names(PrepList) <- Data$groupNames
-    # }
-    # if(RETURNVALUES){
-    #     for(g in seq_len(Data$ngroups))
-    #         PrepList[[g]]$pars <- pars[[g]]
-    #     return(ReturnPars(PrepList, PrepList[[1L]]$itemnames, lr.random=latent.regression$lr.random,
-    #                       random=mixed.design$random, lrPars=lrPars, MG = TRUE))
-    # }
+
     constrain <- UpdateConstrain(pars=pars, constrain=constrain, invariance=invariance, nfact=Data$nfact,
                                  nLambdas=nLambdas, J=nitems, ngroups=Data$ngroups, PrepList=PrepList,
                                  method=opts$method, itemnames=PrepList[[1L]]$itemnames, model=model,
                                  groupNames=Data$groupNames)
     startlongpars <- c()
-    # if(opts$NULL.MODEL){
-    #     constrain <- list()
-    #     for(g in seq_len(length(pars))){
-    #         for(i in seq_len(nitems)){
-    #             pars[[g]][[i]] <- set_null_model(pars[[g]][[i]])
-    #         }
-    #     }
-    # }
     rr <- 0L
     for(g in seq_len(Data$ngroups)){
         r <- Data$Freq[[g]]
@@ -167,96 +106,33 @@ estimation_simple <- function(data, model, group, itemtype = NULL, guess = 0, up
         message("a lot of response combinations")
         df <- 1e10
     }
-
-
-    # HERE
-
-
     nestpars <- nconstr <- 0L
     for(g in seq_len(Data$ngroups))
         for(i in seq_len(nitems+1L))
-            nestpars <- nestpars + sum(pars[[g]][[i]]@est)
-    if(!is.null(mixed.design$random)){
-        for(i in seq_len(length(mixed.design$random)))
-            nestpars <- nestpars + sum(mixed.design$random[[i]]@est)
-    }
-    if(length(lrPars))
-        nestpars <- nestpars + sum(lrPars@est)
-    if(!is.null(dots$structure)) nestpars <- nestpars - 1L
-    if(length(constrain) > 0L)
-        for(i in seq_len(length(constrain)))
-            nconstr <- nconstr + length(constrain[[i]]) - 1L
-    if(Data$ngroups > 1L && !length(constrain)){
-        if(opts$warn && any(invariance %in% c('free_means', 'free_var')))
-            warning('Multiple-group model may not be identified without providing anchor items',
-                    call.=FALSE)
-        for(j in seq_len(Data$ngroups)){
-            if(opts$dentype != 'mixture')
-                tmp <- apply(subset(Data$data, Data$group == Data$groupNames[j]), 2L,
-                             function(x) length(unique(na.omit(x)))) == Data$K
-            for(i in which(!tmp)){
-                if(any(PrepList[[j]]$pars[[i]]@est))
-                    stop(paste0('Multiple Group model will not be identified without ',
-                                'proper constraints (groups contain missing data patterns ',
-                                'where item responses have been completely omitted or, alternatively, ',
-                                'the number of categories within each group is not equal to the ',
-                                'total number of categories)'),
-                         call. = FALSE)
-            }
-        }
-    }
+            nestpars <- nestpars + sum(pars[[g]][[i]]@est) # whats going on here?
+
     nmissingtabdata <- sum(is.na(rowSums(Data$tabdata)))
     dfsubtr <- nestpars - nconstr
-    if(opts$dentype == 'EH') dfsubtr <- dfsubtr + (opts$quadpts - 1L) * Data$ngroups
-    else if(opts$dentype == 'EHW') dfsubtr <- dfsubtr + (opts$quadpts - 3L) * Data$ngroups
+
     if(df <= dfsubtr)
         stop('Too few degrees of freedom. There are only ', df, ' degrees of freedom but ',
              dfsubtr, ' parameters were freely estimated.', call.=FALSE)
     df <- df - dfsubtr
-    if(!is.null(customItems)){
-        for(g in seq_len(Data$ngroups))
-            PrepList[[g]]$exploratory <- FALSE
-    }
+
     G2group <- numeric(Data$ngroups)
-    DERIV <- vector('list', Data$ngroups)
+    DERIV <- vector('list', Data$ngroups) # whats going on here?
     for(g in seq_len(Data$ngroups)){
         DERIV[[g]] <- vector('list', Data$nitems)
         for(i in seq_len(Data$nitems))
             DERIV[[g]][[i]] <- selectMethod(Deriv, c(class(pars[[g]][[i]]), 'matrix'))
     }
-    Ls <- makeLmats(pars, constrain, random = mixed.design$random,
-                    lr.random=latent.regression$lr.random, lrPars=lrPars)
+    Ls <- makeLmats(pars, constrain, random = mixed.design$random, lr.random=latent.regression$lr.random, lrPars=lrPars)
     CUSTOM.IND <- which(sapply(pars[[1L]], class) %in% Use_R_ProbTrace())
     SLOW.IND <- which(sapply(pars[[1L]], class) %in% Use_R_Deriv())
-    if(pars[[1]][[length(pars[[1L]])]]@itemclass %in% c(-1L, -999L))
-        SLOW.IND <- c(SLOW.IND, length(pars[[1L]]))
-    if(opts$dentype != 'Gaussian' && opts$method %in% c('MHRM', 'MIXED', 'SEM'))
-        stop('Non-Gaussian densities not currently supported with MHRM algorithm')
-    #warnings
-    wmsg <- 'Lower and upper bound parameters (g and u) should use \'norm\' (i.e., logit) prior'
-    for(g in seq_len(length(pars))){
-        for(i in seq_len(length(pars[[1L]]))){
-            if(class(pars[[g]][[i]]) == 'dich'){
-                pt <- pars[[g]][[i]]@prior.type
-                if(!(pt[length(pt)-1L] %in% c(0L, 1L, 4L))) warning(wmsg, call.=FALSE)
-                if(!(pt[length(pt)] %in% c(0L, 1L, 4L))) warning(wmsg, call.=FALSE)
-                next
-            } else if(class(pars[[g]][[i]]) == 'partcomp'){
-                pt <- pars[[g]][[i]]@prior.type
-                if(!(pt[length(pt)-1L] %in% c(0L, 1L))) warning(wmsg, call.=FALSE)
-                if(!(pt[length(pt)] %in% c(0L, 1L))) warning(wmsg, call.=FALSE)
-                next
-            } else if(class(pars[[g]][[i]]) == 'nestlogit'){
-                pt <- pars[[g]][[i]]@prior.type
-                if(!(pt[nfact + 2L] %in% c(0L, 1L))) warning(wmsg, call.=FALSE)
-                if(!(pt[nfact + 3L] %in% c(0L, 1L))) warning(wmsg, call.=FALSE)
-                next
-            }
-        }
-    }
     SEMconv <- NA
     opts$times$end.time.Data <- proc.time()[3L]
 
+    # Estimation --------------------------------------------------------------
     #EM estimation
     opts$times$start.time.Estimate <- proc.time()[3L]
     if(opts$method %in% c('EM', 'BL', 'QMCEM', 'MCEM')){

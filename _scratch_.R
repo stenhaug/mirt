@@ -23,7 +23,9 @@ debug(mirt)
 debug(ESTIMATION)
 
 debug(estimation_simple)
+undebug(estimation_simple)
+
 
 deb
 
-undebug()
+
