@@ -117,6 +117,5 @@ setMethod(
         ret <- calcLogLik(object, draws=draws, G2=FALSE, lrPars=object@Model$lrPars)
         class(ret) <- 'MixedClass'
         return(ret)
-
     }
 )
