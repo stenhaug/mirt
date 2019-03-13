@@ -8,7 +8,7 @@ estimation_simple <- function(data, model, group, itemtype = NULL, guess = 0, up
                        control = list(), ...)
 {
 
-    # Beginning stuff ---------------------------------------------------------
+    # A) Beginning stuff ---------------------------------------------------------
     start.time <- proc.time()[3L]
     dots <- list(...)
 
@@ -132,72 +132,37 @@ estimation_simple <- function(data, model, group, itemtype = NULL, guess = 0, up
     SEMconv <- NA
     opts$times$end.time.Data <- proc.time()[3L]
 
-    # Estimation --------------------------------------------------------------
-    #EM estimation
+    # B) Estimation --------------------------------------------------------------
     opts$times$start.time.Estimate <- proc.time()[3L]
-    if(opts$method %in% c('EM', 'BL', 'QMCEM', 'MCEM')){
-        if(length(lrPars)){
-            if(opts$SE && !(opts$SE.type %in% c('complete', 'forward', 'central', 'Richardson')))
-                stop('Information matrix method for latent regression estimates not supported',
-                     call.=FALSE)
-            opts$full <- TRUE
-        } else opts$full <- FALSE
+
+    # B1) EM -------------------------------------------------------------------
+    if(opts$method %in% c('EM', 'QMCEM', 'MCEM', 'BL')){
+        # prepare
+        opts$full <- FALSE
         temp <- matrix(0L,nrow=nitems,ncol=nspec)
         sitems <- matrix(0L, nrow=sum(PrepList[[1L]]$K), ncol=nspec)
         specific <- NULL
-        if(opts$dentype == "discrete"){
-            theta <- 0
-            Theta <- opts$technical$customTheta
-            opts$quadpts <- nrow(Theta)
-            if(pars[[1L]][[1L]]@nfact != ncol(Theta))
-                stop("mirt.model definition does not have same number of traits/attributes as customTheta input", call.=FALSE)
+        if(is.null(opts$quadpts)){tmp <- nfact; opts$quadpts <- select_quadpts(tmp)}
+
+        # theta: seems to define theta (which is a grid by 0.2 from -6 to 6)
+        theta <- 1
+        if(!(opts$method %in% c('QMCEM', 'MCEM'))) theta <- as.matrix(seq(opts$theta_lim[1L], opts$theta_lim[2L], length.out = opts$quadpts))
+
+        if(opts$method %in% c('QMCEM', 'MCEM')){
+            Theta <- NULL
         } else {
-            if(is.null(opts$quadpts)){
-                tmp <- if(opts$dentype == 'bfactor') PrepList[[1L]]$nfact - attr(model, 'nspec') + 1L
-                else nfact
-                opts$quadpts <- select_quadpts(tmp)
-            }
-            if(opts$quadpts < 3 && opts$warn) warning('Should use more than 2 quadpts', call.=FALSE)
-            theta <- 1
-            if(!(opts$method %in% c('QMCEM', 'MCEM')))
-                theta <- as.matrix(seq(opts$theta_lim[1L], opts$theta_lim[2L],
-                                       length.out = opts$quadpts))
-            if(opts$dentype == 'bfactor'){
-                specific <- attr(oldmodel, 'specific')
-                specific[is.na(specific)] <- 1L
-                for(i in seq_len(nitems)) temp[i, specific[i]] <- 1L
-                ind <- 1L
-                for(i in seq_len(nitems)){
-                    for(j in seq_len(PrepList[[1L]]$K[i])){
-                        sitems[ind, ] <- temp[i, ]
-                        ind <- ind + 1L
-                    }
-                }
-                nfact2 <- PrepList[[1L]]$nfact - attr(model, 'nspec') + 1L
-                Theta <- thetaComb(theta, nfact2)
-                Theta <- cbind(Theta[,1L:(nfact2-1L),drop=FALSE],
-                               matrix(Theta[,nfact2], nrow=nrow(Theta), ncol=ncol(sitems)))
-            } else {
-                if(opts$method %in% c('QMCEM', 'MCEM')){
-                    Theta <- NULL
-                } else {
-                    if(opts$quadpts^nfact <= opts$MAXQUAD){
-                        if(is.null(opts$technical$customTheta))
-                            Theta <- thetaComb(theta, nfact)
-                    } else stop('Greater than ', opts$MAXQUAD, ' quadrature points.', call.=FALSE)
-                    if(opts$message && nfact > 3L && !(opts$odentype %in% c('custom', 'discrete')))
-                        message('EM quadrature for high dimensional models are better handled
-                                 \twith the \"QMCEM\" or \"MCEM\" method')
-                }
-            }
-            if(!is.null(opts$technical$customTheta)){
-                Theta <- opts$technical$customTheta
-                if(!is.matrix(Theta)) stop('customTheta input must be a matrix', call.=FALSE)
-                opts$quadpts <- nrow(Theta)
-            }
-            pars <- loadSplinePars(pars, Theta)
-        } #end Theta def
-        ESTIMATE <- EM.group(pars=pars, constrain=constrain, Ls=Ls, PrepList=PrepList, Data=Data,
+            if(opts$quadpts^nfact <= opts$MAXQUAD){
+                if(is.null(opts$technical$customTheta))
+                    Theta <- thetaComb(theta, nfact)
+            } else stop('Greater than ', opts$MAXQUAD, ' quadrature points.', call.=FALSE)
+            if(opts$message && nfact > 3L && !(opts$odentype %in% c('custom', 'discrete')))
+                message('EM quadrature for high dimensional models are better handled
+                             \twith the \"QMCEM\" or \"MCEM\" method')
+        }
+        pars <- loadSplinePars(pars, Theta)
+
+        # where the actual magic is happening
+        ESTIMATE <- EM_group_simple(pars=pars, constrain=constrain, Ls=Ls, PrepList=PrepList, Data=Data,
                              list = list(NCYCLES=opts$NCYCLES, TOL=opts$TOL, MSTEPTOL=opts$MSTEPTOL,
                                          nfactNames=PrepList[[1L]]$nfactNames, theta=theta,
                                          itemloc=PrepList[[1L]]$itemloc, dentype=opts$dentype,
@@ -212,8 +177,21 @@ estimation_simple <- function(data, model, group, itemtype = NULL, guess = 0, up
                                          keep_vcov_PD=opts$keep_vcov_PD, symmetric=opts$technical$symmetric,
                                          MCEM_draws=opts$MCEM_draws),
                              Theta=Theta, DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
-        if(opts$method == 'MCEM')
-            opts$quadpts <- opts$MCEM_draws(ESTIMATE$cycles)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+        if(opts$method == 'MCEM')opts$quadpts <- opts$MCEM_draws(ESTIMATE$cycles)
         opts$Moptim <- ESTIMATE$Moptim
         lrPars <- ESTIMATE$lrPars
         startlongpars <- ESTIMATE$longpars
@@ -238,7 +216,10 @@ estimation_simple <- function(data, model, group, itemtype = NULL, guess = 0, up
             G2 <- G2 + G2group[g]
             logLik <- logLik + sum(rg*log(Pltmp))
         }
-    } else if(opts$method %in% c('MHRM', 'SEM')){ #MHRM estimation
+    }
+
+    # B2 MHRM ------------------------------------------------------------------
+    else if(opts$method %in% c('MHRM', 'SEM')){ #MHRM estimation
         Theta <- matrix(0, Data$N, nitems)
         if(opts$method == 'SEM') opts$NCYCLES <- NA
         ESTIMATE <- MHRM.group(pars=pars, constrain=constrain, Ls=Ls, PrepList=PrepList, Data=Data,
@@ -284,61 +265,9 @@ estimation_simple <- function(data, model, group, itemtype = NULL, guess = 0, up
         rlist <- vector('list', Data$ngroups)
         for(g in seq_len(Data$ngroups))
             rlist[[g]]$expected = numeric(1L)
-    } else if(opts$method == 'MIXED'){
-        if(is.null(opts$technical$RANDSTART)) opts$technical$RANDSTART <- 100L
-        if(is.null(opts$technical$BURNIN) && length(mixed.design$random)) opts$BURNIN <- 200L
-        Theta <- matrix(0, Data$N, nitems)
-        ESTIMATE <- MHRM.group(pars=pars, constrain=constrain, Ls=Ls,
-                               PrepList=PrepList, random=mixed.design$random, Data=Data,
-                               lrPars=lrPars, lr.random=latent.regression$lr.random,
-                               list = list(NCYCLES=opts$NCYCLES, BURNIN=opts$BURNIN,
-                                           SEMCYCLES=opts$SEMCYCLES, gain=opts$gain,
-                                           KDRAWS=opts$KDRAWS, MHDRAWS=opts$MHDRAWS,
-                                           TOL=opts$TOL, SE.type = 'none',
-                                           nfactNames=PrepList[[1L]]$nfactNames,
-                                           itemloc=PrepList[[1L]]$itemloc,
-                                           nfact=nfact, constrain=constrain, verbose=opts$verbose,
-                                           CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
-                                           startlongpars=startlongpars, SE=FALSE,
-                                           cand.t.var=opts$technical$MHcand, warn=opts$warn,
-                                           message=opts$message, expl=FALSE, plausible.draws=0L,
-                                           RANDSTART=opts$technical$RANDSTART,
-                                           MSTEPTOL=opts$MSTEPTOL, Moptim=opts$Moptim,
-                                           keep_vcov_PD=opts$keep_vcov_PD),
-                               DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
-        if(opts$SE && (ESTIMATE$converge || !opts$info_if_converged)){
-            if(opts$verbose)
-                cat('\nCalculating information matrix...\n')
-            tmp <- MHRM.group(pars=ESTIMATE$pars, constrain=constrain, Ls=Ls,
-                              PrepList=PrepList, random=mixed.design$random, Data=Data,
-                              lrPars=ESTIMATE$lrPars, lr.random=latent.regression$lr.random,
-                              list = list(NCYCLES=opts$MHRM_SE_draws, BURNIN=1L,
-                                          SEMCYCLES=opts$SEMCYCLES, gain=opts$gain,
-                                          KDRAWS=opts$KDRAWS, MHDRAWS=opts$MHDRAWS,
-                                          TOL=opts$SEtol, SE=TRUE, SE.type=opts$SE.type,
-                                          nfactNames=PrepList[[1L]]$nfactNames,
-                                          itemloc=PrepList[[1L]]$itemloc,
-                                          nfact=nfact, constrain=constrain, verbose=FALSE,
-                                          CUSTOM.IND=CUSTOM.IND, SLOW.IND=SLOW.IND,
-                                          startlongpars=ESTIMATE$longpars, plausible.draws=0L,
-                                          cand.t.var=opts$technical$MHcand, warn=opts$warn,
-                                          message=opts$message, expl=FALSE,
-                                          RANDSTART=1L,
-                                          MSTEPTOL=opts$MSTEPTOL, Moptim='NR1',
-                                          keep_vcov_PD=opts$keep_vcov_PD),
-                              DERIV=DERIV, solnp_args=opts$solnp_args, control=control)
-            ESTIMATE$pars <- tmp$pars
-            ESTIMATE$random <- tmp$random
-            ESTIMATE$lrPars <- tmp$lrPars
-            ESTIMATE$lr.random <- tmp$lr.random
-            ESTIMATE$info <- tmp$info
-            ESTIMATE$fail_invert_info <- tmp$fail_invert_info
-            ESTIMATE$time <- c(ESTIMATE$time, SE=sum(tmp$time))
-        }
-        rlist <- vector('list', Data$ngroups)
-        for(g in seq_len(Data$ngroups))
-            rlist[[g]]$expected = numeric(1L)
     }
+
+    # C) Model checks ------------------------------------------------------------
     for(g in seq_len(length(pars))){
         for(i in seq_len(length(pars[[1L]]))){
             if(class(pars[[g]][[i]]) == 'dich'){
